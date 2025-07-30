@@ -8,6 +8,26 @@
 </head>
 <body>
     <div class="container">
+        <nav>
+            <ul>
+                <li><a href="{{ url_for('index') }}">Home</a></li>
+                {% if current_user.is_authenticated %}
+                    <li><a href="{{ url_for('settings') }}">Settings</a></li>
+                    <li><a href="{{ url_for('logout') }}">Logout</a></li>
+                {% else %}
+                    <li><a href="{{ url_for('login') }}">Login</a></li>
+                {% endif %}
+            </ul>
+        </nav>
+        {% with messages = get_flashed_messages() %}
+            {% if messages %}
+                <ul class="flashes">
+                    {% for message in messages %}
+                        <li>{{ message }}</li>
+                    {% endfor %}
+                </ul>
+            {% endif %}
+        {% endwith %}
         {% block content %}{% endblock %}
     </div>
 </body>

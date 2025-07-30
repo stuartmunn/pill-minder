@@ -17,7 +17,6 @@ COPY . .
 EXPOSE 5000
 
 # Define environment variables
-ENV TELEGRAM_BOT_TOKEN="your_telegram_bot_token"
 ENV SECRET_KEY="your_secret_key"
 
 # Run app.py when the container launches

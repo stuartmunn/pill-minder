@@ -1,12 +1,9 @@
-
 import os
 from flask import Flask, render_template, request, redirect, url_for, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from apscheduler.schedulers.background import BackgroundScheduler
 import requests
-import telegram
-from telegram.ext import Updater, CommandHandler, CallbackQueryHandler
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = os.environ.get('SECRET_KEY', 'a_secret_key')
@@ -18,14 +15,10 @@ login_manager = LoginManager()
 login_manager.init_app(app)
 login_manager.login_view = 'login'
 
-TELEGRAM_BOT_TOKEN = os.environ.get('TELEGRAM_BOT_TOKEN')
-bot = telegram.Bot(token=TELEGRAM_BOT_TOKEN)
-
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(100), unique=True)
     password = db.Column(db.String(100))
-    telegram_chat_id = db.Column(db.String(100))
 
 class Medication(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -56,8 +49,7 @@ def register():
     if request.method == 'POST':
         username = request.form['username']
         password = request.form['password']
-        telegram_chat_id = request.form['telegram_chat_id']
-        new_user = User(username=username, password=password, telegram_chat_id=telegram_chat_id)
+        new_user = User(username=username, password=password)
         db.session.add(new_user)
         db.session.commit()
         return redirect(url_for('login'))
@@ -104,6 +96,28 @@ def delete_medication(medication_id):
     db.session.commit()
     return redirect(url_for('index'))
 
+@app.route('/settings', methods=['GET', 'POST'])
+@login_required
+def settings():
+    if request.method == 'POST':
+        action = request.form.get('action')
+        if action == 'change_username':
+            new_username = request.form['username']
+            current_user.username = new_username
+            db.session.commit()
+            flash('Username changed successfully')
+        elif action == 'change_password':
+            new_password = request.form['password']
+            confirm_password = request.form['confirm_password']
+            if new_password == confirm_password:
+                current_user.password = new_password
+                db.session.commit()
+                flash('Password changed successfully')
+            else:
+                flash('Passwords do not match')
+        return redirect(url_for('settings'))
+    return render_template('settings.html')
+
 @app.route('/bnf_lookup')
 @login_required
 def bnf_lookup():
@@ -113,52 +127,15 @@ def bnf_lookup():
     # For now, we'll just return a link.
     return jsonify({'url': url})
 
-def send_telegram_notification(user_id, medication_id, medication_name):
-    print(f"Attempting to send notification for medication {medication_name} to user {user_id}")
-    user = User.query.get(user_id)
-    if user and user.telegram_chat_id:
-        try:
-            keyboard = [[telegram.InlineKeyboardButton("Mark as Taken", callback_data=f"taken_{medication_id}")]]
-            reply_markup = telegram.InlineKeyboardMarkup(keyboard)
-            bot.send_message(chat_id=user.telegram_chat_id, text=f"Time to take your {medication_name}", reply_markup=reply_markup)
-            print(f"Successfully sent notification for medication {medication_name} to user {user_id}")
-        except Exception as e:
-            print(f"Error sending Telegram notification: {e}")
-    else:
-        print(f"User {user_id} not found or has no telegram_chat_id")
-
 def schedule_medication(med):
     print(f"Scheduling notification for medication {med.name} at {med.time}")
     # This is a simplified scheduler. A real implementation would parse the time properly.
-    scheduler.add_job(send_telegram_notification, 'cron', hour=med.time.split(":")[0], minute=med.time.split(":")[1], args=[med.user_id, med.id, med.name])
-
-def telegram_callback_handler(update, context):
-    query = update.callback_query
-    query.answer()
-    data = query.data
-    if data.startswith("taken_"):
-        medication_id = int(data.split("_")[1])
-        with app.app_context():
-            medication = Medication.query.get(medication_id)
-            if medication:
-                medication.taken = True
-                db.session.commit()
-                query.edit_message_text(text=f"Medication {medication.name} marked as taken.")
-
-def start_command(update, context):
-    """Send a message when the command /start is issued."""
-    chat_id = update.effective_chat.id
-    update.message.reply_text(f'Welcome to Pill Minder! Your chat ID is: {chat_id}')
+    # scheduler.add_job(send_telegram_notification, 'cron', hour=med.time.split(":")[0], minute=med.time.split(":")[1], args=[med.user_id, med.id, med.name])
 
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
     scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.start()
-
-    updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
-    updater.dispatcher.add_handler(CommandHandler("start", start_command))
-    updater.dispatcher.add_handler(CallbackQueryHandler(telegram_callback_handler))
-    updater.start_polling()
 
     app.run(host='0.0.0.0', port=5000)
