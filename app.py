@@ -85,6 +85,7 @@ def add_medication():
     new_medication = Medication(name=name, dosage=dosage, time=time, user_id=current_user.id)
     db.session.add(new_medication)
     db.session.commit()
+    schedule_medication(new_medication)
     return redirect(url_for('index'))
 
 @app.route('/update_medication/<int:medication_id>', methods=['POST'])
@@ -113,18 +114,23 @@ def bnf_lookup():
     return jsonify({'url': url})
 
 def send_telegram_notification(user_id, medication_id, medication_name):
+    print(f"Attempting to send notification for medication {medication_name} to user {user_id}")
     user = User.query.get(user_id)
     if user and user.telegram_chat_id:
-        keyboard = [[telegram.InlineKeyboardButton("Mark as Taken", callback_data=f"taken_{medication_id}")]]
-        reply_markup = telegram.InlineKeyboardMarkup(keyboard)
-        bot.send_message(chat_id=user.telegram_chat_id, text=f"Time to take your {medication_name}", reply_markup=reply_markup)
+        try:
+            keyboard = [[telegram.InlineKeyboardButton("Mark as Taken", callback_data=f"taken_{medication_id}")]]
+            reply_markup = telegram.InlineKeyboardMarkup(keyboard)
+            bot.send_message(chat_id=user.telegram_chat_id, text=f"Time to take your {medication_name}", reply_markup=reply_markup)
+            print(f"Successfully sent notification for medication {medication_name} to user {user_id}")
+        except Exception as e:
+            print(f"Error sending Telegram notification: {e}")
+    else:
+        print(f"User {user_id} not found or has no telegram_chat_id")
 
-def schedule_medications():
-    with app.app_context():
-        medications = Medication.query.filter_by(taken=False).all()
-        for med in medications:
-            # This is a simplified scheduler. A real implementation would parse the time properly.
-            scheduler.add_job(send_telegram_notification, 'cron', hour=med.time.split(":")[0], minute=med.time.split(":")[1], args=[med.user_id, med.id, med.name])
+def schedule_medication(med):
+    print(f"Scheduling notification for medication {med.name} at {med.time}")
+    # This is a simplified scheduler. A real implementation would parse the time properly.
+    scheduler.add_job(send_telegram_notification, 'cron', hour=med.time.split(":")[0], minute=med.time.split(":")[1], args=[med.user_id, med.id, med.name])
 
 def telegram_callback_handler(update, context):
     query = update.callback_query
@@ -139,14 +145,19 @@ def telegram_callback_handler(update, context):
                 db.session.commit()
                 query.edit_message_text(text=f"Medication {medication.name} marked as taken.")
 
+def start_command(update, context):
+    """Send a message when the command /start is issued."""
+    chat_id = update.effective_chat.id
+    update.message.reply_text(f'Welcome to Pill Minder! Your chat ID is: {chat_id}')
+
 if __name__ == '__main__':
     with app.app_context():
         db.create_all()
-    scheduler = BackgroundScheduler()
+    scheduler = BackgroundScheduler(timezone="UTC")
     scheduler.start()
-    schedule_medications()
 
     updater = Updater(TELEGRAM_BOT_TOKEN, use_context=True)
+    updater.dispatcher.add_handler(CommandHandler("start", start_command))
     updater.dispatcher.add_handler(CallbackQueryHandler(telegram_callback_handler))
     updater.start_polling()
 
