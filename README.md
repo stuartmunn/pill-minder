@@ -2,6 +2,8 @@
 
 This is a multi-user medication reminder application with a web interface and Telegram notifications.
 
+Warning: The application is still under development and contains many issues!
+
 ## Features
 
 - Multi-user system with registration and login.
@@ -29,6 +31,7 @@ SECRET_KEY=a_very_secret_key
 ```
 
 Replace `your_telegram_bot_token` with the token you got from the BotFather.
+Replace `a_very_secret_key' with a secure key
 
 ### 3. Build and Run the Docker Container
 
