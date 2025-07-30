@@ -1,0 +1,90 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="dashboard-container">
+    <h1>Today's Medications</h1>
+    <a href="{{ url_for('logout') }}">Logout</a>
+    <table>
+        <thead>
+            <tr>
+                <th>Medication</th>
+                <th>Dosage</th>
+                <th>Time</th>
+                <th>Status</th>
+                <th>Action</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for med in medications %}
+            <tr>
+                <td class="medication-name" data-medication-name="{{ med.name }}">{{ med.name }}</td>
+                <td>{{ med.dosage }}</td>
+                <td>{{ med.time }}</td>
+                <td>{{ 'Taken' if med.taken else 'Pending' }}</td>
+                <td>
+                    {% if not med.taken %}
+                    <button class="taken-btn" data-med-id="{{ med.id }}">Mark as Taken</button>
+                    {% endif %}
+                    <a href="{{ url_for('delete_medication', medication_id=med.id) }}">Delete</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <h2>Add Medication</h2>
+    <form action="{{ url_for('add_medication') }}" method="post">
+        <input type="text" name="name" placeholder="Medication Name" required>
+        <input type="text" name="dosage" placeholder="Dosage" required>
+        <input type="time" name="time" required>
+        <button type="submit">Add</button>
+    </form>
+</div>
+
+<div id="med-info-popup" class="popup">
+    <div class="popup-content">
+        <span class="close-btn">&times;</span>
+        <p id="med-info-text"></p>
+    </div>
+</div>
+
+<script>
+    document.querySelectorAll('.taken-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const medId = btn.dataset.medId;
+            fetch(`/update_medication/${medId}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        location.reload();
+                    }
+                });
+        });
+    });
+
+    const medInfoPopup = document.getElementById('med-info-popup');
+    const medInfoText = document.getElementById('med-info-text');
+    const closeBtn = document.querySelector('.close-btn');
+
+    document.querySelectorAll('.medication-name').forEach(name => {
+        name.addEventListener('mouseover', () => {
+            const medName = name.dataset.medicationName;
+            fetch(`/bnf_lookup?query=${medName}`)
+                .then(response => response.json())
+                .then(data => {
+                    medInfoText.innerHTML = `<a href="${data.url}" target="_blank">BNF Search for ${medName}</a>`;
+                    medInfoPopup.style.display = 'block';
+                });
+        });
+    });
+
+    closeBtn.addEventListener('click', () => {
+        medInfoPopup.style.display = 'none';
+    });
+
+    window.addEventListener('click', (event) => {
+        if (event.target == medInfoPopup) {
+            medInfoPopup.style.display = 'none';
+        }
+    });
+</script>
+{% endblock %}
