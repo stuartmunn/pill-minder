@@ -40,8 +40,7 @@ Replace `a_very_secret_key' with a secure key
 2.  Run the Docker container:
 
     ```bash
-    docker run -d -p 5003:5000 -e SECRET_KEY="testing" -v pill-minder-data:/app/instance --name pill-minder-app pill-min
-der-app
+    docker run -d -p 5003:5000 --env-file ./.env  -v pill-minder-data:/app/instance --name pill-minder-app pill-minder-app
     ```
 
     The application will be available at [http://localhost:5000](http://localhost:5000).
